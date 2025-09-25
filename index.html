@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎯 Admin Panel</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: "Segoe UI", sans-serif;
+    }
+    body {
+      margin: 0;
+      background-color: #f4f6f8;
+      color: #333;
+    }
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 220px;
+      height: 100vh;
+      background: #1e1e2f;
+      padding-top: 30px;
+      color: #fff;
+    }
+    .sidebar h2 {
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 22px;
+    }
+    .sidebar a {
+      display: block;
+      padding: 15px 20px;
+      color: #ddd;
+      text-decoration: none;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+    .sidebar a:hover {
+      background-color: #33334d;
+    }
+    .content {
+      margin-left: 220px;
+      padding: 30px;
+    }
+    .section {
+      display: none;
+    }
+    .section.active {
+      display: block;
+    }
+    h1 {
+      margin-top: 0;
+    }
+    input, select, button {
+      padding: 10px;
+      margin-top: 10px;
+      margin-bottom: 20px;
+      display: block;
+      width: 100%;
+      max-width: 400px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 20px;
+    }
+    table th, table td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      text-align: left;
+    }
+    table th {
+      background-color: #eee;
+    }
+    .danger {
+      background-color: #e74c3c;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    .danger:hover {
+      background-color: #c0392b;
+    }
+    .success {
+      background-color: #2ecc71;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    .success:hover {
+      background-color: #27ae60;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="sidebar">
+    <h2>🎯 Panel</h2>
+    <a data-section="raffle">🎁 Çekiliş</a>
+    <a data-section="users">👤 Kullanıcılar</a>
+    <a data-section="winners">🏆 Kazananlar</a>
+  </div>
+
+  <div class="content">
+    <h2>🎫 Kodları Yükle</h2>
+<input type="text" id="codeBulkInput" placeholder="KOD1, KOD2, KOD3..." />
+<button class="success" onclick="uploadCodes()">Kodları Yükle</button>
+
+    <div id="raffle" class="section active">
+      <h1>🎁 Çekiliş Başlat</h1>
+      <input type="text" id="codeInput" placeholder="Ödül Kodu"/>
+      <input type="number" id="winnerCount" placeholder="Kazanan Sayısı" value="1"/>
+      <button class="success" onclick="startRaffle()">Çekilişi Başlat</button>
+      <button class="danger" onclick="endRaffle()">Çekilişi Bitir</button>
+    </div>
+
+    <div id="users" class="section">
+      <h1>👤 Kullanıcı Adları</h1>
+      <table id="usersTable">
+        <thead><tr><th>Telegram ID</th><th>Site Kullanıcı Adı</th><th>Sil</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="winners" class="section">
+      <h1>🏆 Kazananlar</h1>
+      <ul id="winnersList"></ul>
+    </div>
+  </div>
+
+  <script>
+    // Sidebar menü tıklamaları
+    document.querySelectorAll('.sidebar a').forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const sectionId = this.getAttribute('data-section');
+        showSection(sectionId);
+      });
+    });
+
+    function showSection(id) {
+      document.querySelectorAll(".section").forEach(sec => sec.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+
+      if (id === "users") loadUsers();
+      if (id === "winners") loadWinners();
+    }
+
+    async function startRaffle() {
+      const code = document.getElementById("codeInput").value;
+      const count = document.getElementById("winnerCount").value;
+      if (!code || !count) return alert("Kod ve kazanan sayısı zorunludur.");
+      await fetch("/set-code", {
+        method: "POST",
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ code })
+      });
+      await fetch("/start-raffle", {
+        method: "POST",
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ count })
+      });
+      alert("Çekiliş başlatıldı.");
+    }
+
+    async function endRaffle() {
+      await fetch("/end-raffle", { method: "POST" });
+      alert("Çekiliş bitirildi.");
+    }
+
+    async function loadUsers() {
+      const res = await fetch("/usernames");
+      const data = await res.json();
+      const tbody = document.querySelector("#usersTable tbody");
+      tbody.innerHTML = "";
+      for (let id in data) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${id}</td>
+          <td>${data[id]}</td>
+          <td><button class="danger" onclick="deleteUser('${id}')">Sil</button></td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function deleteUser(id) {
+      if (!confirm("Silmek istediğinize emin misiniz?")) return;
+      await fetch("/delete-username/" + id, { method: "DELETE" });
+      loadUsers();
+    }
+
+    async function loadWinners() {
+      const res = await fetch("/winners");
+      const data = await res.json();
+      const ul = document.getElementById("winnersList");
+      ul.innerHTML = "";
+      data.forEach(w => {
+        const li = document.createElement("li");
+        li.innerHTML = `🏆 ${w.telegram} - <b>${w.site || "Tanımsız"}</b>`;
+        ul.appendChild(li);
+      });
+    }
+
+    async function uploadCodes() {
+  const raw = document.getElementById("codeBulkInput").value;
+  const codes = raw.split(",").map(c => c.trim()).filter(c => c);
+  if (!codes.length) return alert("Kod girmelisin!");
+  
+  await fetch("/set-codes", {
+    method: "POST",
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ codes })
+  });
+
+  alert(`${codes.length} kod yüklendi.`);
+  document.getElementById("codeBulkInput").value = "";
+}
+
+  </script>
+  
+</body>
+</html>
